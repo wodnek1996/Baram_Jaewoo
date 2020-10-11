@@ -3,15 +3,17 @@ import cv2
 import numpy as np
 import torchvision.transforms as T
 import time
-
+import rospy
+from std_msgs.msg import String
 import torch
 import torchvision
 from torchvision import transforms
 
-if torch.cuda.is_available :
+if torch.cuda.is_available:
     device = 'cuda'
 else:
     device = 'cpu'
+
 
 class CNN(torch.nn.Module):
 
@@ -33,12 +35,13 @@ class CNN(torch.nn.Module):
     def forward(self, x):
         out = self.layer1(x)
         out = self.layer2(out)
-        out = out.view(out.size(0), -1)   # Flatten them for FC
+        out = out.view(out.size(0), -1)  # Flatten them for FC
         out = self.fc(out)
         return out
 
+
 def cnn_pytorch(img_input, x, y, h, w):
-    img_roi = img_input[(y-10):(y + h +20), (x-20):(x + w+15)]
+    img_roi = img_input[(y - 10):(y + h + 20), (x - 20):(x + w + 15)]
     cv2.imshow('cnn', img_roi)
     time.sleep(0.5)
     image = cv2.cvtColor(img_roi, cv2.COLOR_BGR2GRAY)
@@ -49,10 +52,14 @@ def cnn_pytorch(img_input, x, y, h, w):
     prediction = model(Data_1)
     pre = torch.argmax(prediction, 1)
     print('prediction : ', pre)
-    #cv2.putText(img_roi, pre, (10,10), cv2.FONT_HERSHEY_PLAIN, 1, (0,255,0), 3)
+    send_str = pre
+    rospy.loginfo(send_str)
+    pub.publish(send_str)
+    # cv2.putText(img_roi, pre, (10,10), cv2.FONT_HERSHEY_PLAIN, 1, (0,255,0), 3)
     cv2.imshow('cnn', img_roi)
 
-def yolo(img_color, output_layers, colors ):
+
+def yolo(img_color, output_layers, colors):
     # Detecting objects
     blob = cv2.dnn.blobFromImage(img_color, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
     net.setInput(blob)
@@ -88,12 +95,12 @@ def yolo(img_color, output_layers, colors ):
             x, y, w, h = boxes[i]
             label = str(classes[class_ids[i]])
             color = colors[i]
-            cv2.rectangle(img_color, (x, y), (x + w, y + h),color, 2)
+            cv2.rectangle(img_color, (x, y), (x + w, y + h), color, 2)
             cv2.putText(img_color, label, (x, y + 30), font, 3, color, 3)
             if (len(class_ids) > 3):
                 if class_ids[i] == 1:
                     cnn_pytorch(img_input, x, y, h, w)
-                    #time.sleep(0.5)
+                    # time.sleep(0.5)
 
 
 
@@ -114,24 +121,28 @@ colors = np.random.uniform(0, 255, size=(50, 3))
 cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 
 while (True):
+    try:
+        ret, img_color = cap.read()
+        pub = rospy.Publisher('chatter', String, queue_size=10)
+        rospy.init_node('talker', anonymous=True)
 
-    ret, img_color = cap.read()
+        if ret == False:
+            break;
 
-    if ret == False:
-        break;
+        img_input = img_color.copy()
+        cv2.imshow("Image", img_color)
+        height, width, channels = img_color.shape
 
-    img_input = img_color.copy()
-    cv2.imshow("Image", img_color)
-    height, width, channels = img_color.shape
+        yolo(img_color, output_layers, colors)
 
-    yolo(img_color, output_layers, colors)
+        cv2.imshow("Image", img_color)
+        print('하나 끝!')
 
-    cv2.imshow("Image", img_color)
-    print('하나 끝!')
-
-    key = cv2.waitKey(1)
-    if key == 27:
-        break
+        key = cv2.waitKey(1)
+        if key == 27:
+            break
+    except rospy.ROSInterruptException:
+        pass
 
 cv2.waitKey(0)
 cap.release()
