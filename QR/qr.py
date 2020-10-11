@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import pyzbar.pyzbar as pyzbar
 import cv2
-import rospy from std_msgs.msgimport String
+import rospy from std_msgs.msg import String
 import sys
 
 def qr_cord():
